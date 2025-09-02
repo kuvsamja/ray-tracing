@@ -1,5 +1,6 @@
 import math
 import sys
+import random
 
 from vec3 import vec3
 from ray import Ray
@@ -11,6 +12,7 @@ from camera import Camera
 
 aspect_ratio = 16 / 9
 image_width  = 1080
+
 cam = Camera(image_width, aspect_ratio)
 
 world = HittableList()
