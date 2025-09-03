@@ -4,6 +4,7 @@ import math
 from vec3 import vec3
 from ray import Ray
 from objects.sphere import Sphere
+from objects.plane import Plane
 from hittable import HitRecord, Hittable
 from hittable_list import HittableList
 from interval import Interval
@@ -15,7 +16,7 @@ class Camera():
         self.image_width = image_width
         self.aspect_ratio = aspect_ratio
         self.image_height = int(self.image_width // self.aspect_ratio)
-        self.samples_per_pixel = 100
+        self.samples_per_pixel = 1
 
         self.pixel_samples_scale = 1.0 / self.samples_per_pixel
         self.viewport_height = 2
@@ -42,10 +43,10 @@ class Camera():
         with open("img.ppm", "w") as self.img:
             self.img.write(f"P3\n{self.image_width} {self.image_height}\n255\n")
             for j in range(self.image_height):  
-                # past_percentage = percentage
-                # percentage = int(j / self.image_height * 100)
-                # if past_percentage != percentage:
-                #     sys.stdout.write(f"{percentage}\n")
+                past_percentage = percentage
+                percentage = int(j / self.image_height * 100)
+                if past_percentage != percentage:
+                    sys.stdout.write(f"{percentage}\n")
                 for i in range(self.image_width):
                     pixel_color = vec3(0, 0, 0)
                     self.sample = 0
@@ -54,7 +55,7 @@ class Camera():
                         pixel_color += self.ray_color(self.r, world)
                     
                     self.write_color(self.pixel_samples_scale * pixel_color)
-                sys.stdout.write(f"{j}\n")
+                
                     
         print("100\ndone")
 
@@ -63,7 +64,7 @@ class Camera():
         rec = HitRecord()
         hit_anything, rec = world.hit(r, Interval(0, math.inf), rec)
         if hit_anything:
-            return 0.5 * (rec.normal + vec3(1, 1, 1))
+            return 0.5 * (vec3(1, 1, 1) + rec.normal)
         
         unit_direction = vec3.unit_vector(r.direction())
         a = 0.5*(unit_direction.y() + 1.0)
