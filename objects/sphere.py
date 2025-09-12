@@ -5,12 +5,12 @@ from vec3 import vec3
 from interval import Interval
 
 class Sphere(Hittable):
-    def __init__(self, center, radius):
+    def __init__(self, center, radius, mat):
         self.center = center
         self.radius = radius
-        
+        self.mat = mat
+
     def hit(self, r, ray_t, rec):
-        rec = HitRecord() 
         oc = self.center - r.origin()
         a = r.direction().length_squared()
         h = vec3.dot(r.direction(), oc)
@@ -36,6 +36,7 @@ class Sphere(Hittable):
         
         outward_normal = (rec.p - self.center) / self.radius
         rec.set_face_normal(r, outward_normal)
+        rec.mat = self.mat
 
         return True, rec
     

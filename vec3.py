@@ -1,4 +1,5 @@
 import math
+import utilities
 
 class vec3():
     def __init__(self, x = 0, y = 0, z = 0):
@@ -44,9 +45,35 @@ class vec3():
         return vec3(self.e[0] - v.e[0], self.e[1] - v.e[1], self.e[2] - v.e[2])
     
     def __mul__(self, t):
-        return vec3(self.e[0] * t, self.e[1] * t, self.e[2] * t)
+        if isinstance(t, vec3):
+            # component-wise multiplication
+            return vec3(
+                self.e[0] * t.e[0],
+                self.e[1] * t.e[1],
+                self.e[2] * t.e[2]
+            )
+        else:
+            # scalar multiplication
+            return vec3(
+                self.e[0] * t,
+                self.e[1] * t,
+                self.e[2] * t
+            )
     def __rmul__(self, t):
-        return vec3(self.e[0] * t, self.e[1] * t, self.e[2] * t)
+        if isinstance(t, vec3):
+            # component-wise multiplication
+            return vec3(
+                self.e[0] * t.e[0],
+                self.e[1] * t.e[1],
+                self.e[2] * t.e[2]
+            )
+        else:
+            # scalar multiplication
+            return vec3(
+                self.e[0] * t,
+                self.e[1] * t,
+                self.e[2] * t
+            )
     def __truediv__(self, t):
         return vec3(self.e[0] / t, self.e[1] / t, self.e[2] / t)
     
@@ -67,3 +94,37 @@ class vec3():
             u.e[2] * v.e[0] - u.e[0] * v.e[2],
             u.e[0] * v.e[1] - u.e[1] * v.e[0]
         )
+    def random():
+        return vec3(utilities.random_double(), utilities.random_double(), utilities.random_double())
+    
+
+    def random_in_range(min_val, max_val):
+        return vec3(utilities.random_double_range(min_val,max_val), utilities.random_double_range(min_val,max_val), utilities.random_double_range(min_val,max_val))
+
+    def random_unit_vector():
+        while True:
+            p = vec3.random_in_range(-1,1)
+            lensq = p.length_squared()
+            if 0.0001 < lensq <= 1:
+                return p / math.sqrt(lensq)
+            
+    def random_on_hemisphere(normal):
+        on_unit_sphere = vec3.random_unit_vector()
+        if vec3.dot(on_unit_sphere, normal) > 0.0:
+            return on_unit_sphere
+        else:
+            return -on_unit_sphere
+        
+    def reflect(v, n):
+        return v - 2*vec3.dot(v,n)*n
+    
+    def refract(uv, n, etai_over_etat):
+        cos_theta = min(vec3.dot(-uv, n), 1.0)
+        r_out_perp =  etai_over_etat * (uv + cos_theta*n)
+        r_out_parallel = -math.sqrt(abs(1.0 - r_out_perp.length_squared())) * n
+        return r_out_perp + r_out_parallel
+
+    def near_zero(self):
+        s = 0.0001
+        return (abs(self.e[0]) < s) and (abs(self.e[1]) < s) and (abs(self.e[2]) < s)
+    

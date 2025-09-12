@@ -1,12 +1,15 @@
 import sys
 import math
 
+from pyautogui import pixel
+
 from vec3 import vec3
 from ray import Ray
 from objects.sphere import Sphere
 from objects.plane import Plane
 from hittable import HitRecord, Hittable
 from hittable_list import HittableList
+from material import Material, Lambertian, Metal
 from interval import Interval
 import utilities
 
@@ -16,9 +19,11 @@ class Camera():
         self.image_width = image_width
         self.aspect_ratio = aspect_ratio
         self.image_height = int(self.image_width // self.aspect_ratio)
-        self.samples_per_pixel = 1
+        self.samples_per_pixel = 10
 
+        self.max_depth = 50
         self.pixel_samples_scale = 1.0 / self.samples_per_pixel
+        # self.max_depth = 10
         self.viewport_height = 2
         self.viewport_width = self.viewport_height * (self.image_width / self.image_height)
         self.focal_length = 1
@@ -42,7 +47,7 @@ class Camera():
         percentage = -1
         with open("img.ppm", "w") as self.img:
             self.img.write(f"P3\n{self.image_width} {self.image_height}\n255\n")
-            for j in range(self.image_height):  
+            for j in range(self.image_height):
                 past_percentage = percentage
                 percentage = int(j / self.image_height * 100)
                 if past_percentage != percentage:
@@ -52,7 +57,7 @@ class Camera():
                     self.sample = 0
                     for self.sample in range(self.samples_per_pixel):
                         self.r = self.get_ray(i, j)
-                        pixel_color += self.ray_color(self.r, world)
+                        pixel_color += self.ray_color(self.r, world, self.max_depth)
                     
                     self.write_color(self.pixel_samples_scale * pixel_color)
                 
@@ -60,20 +65,43 @@ class Camera():
         print("100\ndone")
 
     
-    def ray_color(self, r, world):
+    def ray_color(self, r, world, depth, recourses = False):
         rec = HitRecord()
-        hit_anything, rec = world.hit(r, Interval(0, math.inf), rec)
+        if depth <= 0:
+            return vec3(0, 0, 0)
+        hit_anything, rec = world.hit(r, Interval(0.001, math.inf), rec)
         if hit_anything:
-            return 0.5 * (vec3(1, 1, 1) + rec.normal)
-        
+            does_scatter, scattered, attenuation = rec.mat.scatter(r, rec)
+            if does_scatter:
+                return attenuation * self.ray_color(scattered, world, depth-1)
+        # return vec3(1,1,1)
         unit_direction = vec3.unit_vector(r.direction())
         a = 0.5*(unit_direction.y() + 1.0)
-        return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0)
-        
+        return (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0)
+        # hit_anything, rec = world.hit(r, Interval(0.001, math.inf), rec)
+        # if hit_anything:
+        #     direction = rec.normal + vec3.random_unit_vector()
+        #     # direction = vec3.random_on_hemisphere(rec.normal)
+        #     return 0.5 * self.ray_color(Ray(rec.p, direction), world, depth - 1, False)
+        # if recourses:
+        #     return vec3(1, 1, 1)
+        # unit_direction = vec3.unit_vector(r.direction())
+        # a = 0.5*(unit_direction.y() + 1.0)
+        # return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0)
+    
+    def linear_to_gamma(linear_component):
+        if linear_component > 0:
+            return math.sqrt(linear_component)
+        return 0
+
     def write_color(self, pixel_color):
         r = pixel_color[0]
         g = pixel_color[1]
         b = pixel_color[2]
+
+        r = Camera.linear_to_gamma(r)
+        g = Camera.linear_to_gamma(g)
+        b = Camera.linear_to_gamma(b)
 
         ir = int(r * 255.999)
         ig = int(g * 255.999)
