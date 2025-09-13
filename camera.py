@@ -14,33 +14,51 @@ from interval import Interval
 import utilities
 
 class Camera():
-    def __init__(self, image_width, aspect_ratio):
-        # Image
-        self.image_width = image_width
-        self.aspect_ratio = aspect_ratio
-        self.image_height = int(self.image_width // self.aspect_ratio)
-        self.samples_per_pixel = 10
-
+    def __init__(self):
+        self.image_width = 1080
+        self.aspect_ratio = 16 / 9
+        self.samples_per_pixel = 1
         self.max_depth = 50
-        self.pixel_samples_scale = 1.0 / self.samples_per_pixel
-        # self.max_depth = 10
-        self.viewport_height = 2
-        self.viewport_width = self.viewport_height * (self.image_width / self.image_height)
-        self.focal_length = 1
-        self.camera_center = vec3(0, 0, 0)
 
-        self.viewport_u = vec3(self.viewport_width, 0, 0)
-        self.viewport_v = vec3(0, -self.viewport_height, 0)
+        self.vfov = 90
+        self.lookfrom = vec3(0,0,0)
+        self.lookat   = vec3(0,0,-1)
+        self.vup      = vec3(0,1,0)
+        self.defocus_angle = 0
+        self.focus_dist = 10
+
+    def render_init(self):
+        # Image
+        self.image_height = int(self.image_width // self.aspect_ratio)
+
+        # Camera
+        self.pixel_samples_scale = 1.0 / self.samples_per_pixel
+        self.camera_center = self.lookfrom
+
+        # Viewport
+        theta = math.radians(self.vfov)
+        h = math.tan(theta/2)
+        self.viewport_height = 2 * h * self.focus_dist
+        self.viewport_width = self.viewport_height * (self.image_width / self.image_height)
+
+        w = vec3.unit_vector(self.lookfrom - self.lookat)
+        u = vec3.unit_vector(vec3.cross(self.vup, w))
+        v = vec3.cross(w, u)
+
+        self.viewport_u = self.viewport_width * u
+        self.viewport_v = self.viewport_height * -v
 
         self.pixel_delta_u = self.viewport_u / self.image_width
         self.pixel_delta_v = self.viewport_v / self.image_height
-
-        # Calculate the location of the upper left pixel.
-        self.viewport_upper_left = self.camera_center - vec3(0, 0, self.focal_length) - self.viewport_u/2 - self.viewport_v/2
+        self.viewport_upper_left = self.camera_center - (self.focus_dist * w) - self.viewport_u/2 - self.viewport_v/2
         self.pixel00_loc = self.viewport_upper_left + 0.5 * (self.pixel_delta_u + self.pixel_delta_v)
 
+        defocus_radius = self.focus_dist * math.tan(math.radians(self.defocus_angle / 2))
+        self.defocus_disk_u = u * defocus_radius
+        self.defocus_disk_v = v * defocus_radius
 
     def render(self, world):
+        self.render_init()
         self.world = world
 
         past_percentage = -1
@@ -114,12 +132,17 @@ class Camera():
 
         offset = self.sample_square()
         pixel_sample = self.pixel00_loc + ((i + offset.x()) * self.pixel_delta_u) + ((j + offset.y()) * self.pixel_delta_v)
-
-        ray_origin = self.camera_center
+        if self.defocus_angle <= 0:
+            ray_origin = self.camera_center
+        else:
+            ray_origin = self.defocus_disk_sample()
         ray_direction = pixel_sample - ray_origin
 
         return Ray(ray_origin, ray_direction)
     
+    def defocus_disk_sample(self):
+        p = vec3.random_in_unit_disk()
+        return self.camera_center + (p[0] * self.defocus_disk_u) + (p[1] * self.defocus_disk_v)
 
     def sample_square(self):
         # Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.

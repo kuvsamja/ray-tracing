@@ -94,20 +94,23 @@ class vec3():
             u.e[2] * v.e[0] - u.e[0] * v.e[2],
             u.e[0] * v.e[1] - u.e[1] * v.e[0]
         )
-    def random():
-        return vec3(utilities.random_double(), utilities.random_double(), utilities.random_double())
     
-
-    def random_in_range(min_val, max_val):
-        return vec3(utilities.random_double_range(min_val,max_val), utilities.random_double_range(min_val,max_val), utilities.random_double_range(min_val,max_val))
+    def random(min_val = 0, max_val = 1):
+        return vec3(utilities.random_double(min_val,max_val), utilities.random_double(min_val,max_val), utilities.random_double(min_val,max_val))
 
     def random_unit_vector():
         while True:
-            p = vec3.random_in_range(-1,1)
+            p = vec3.random(-1,1)
             lensq = p.length_squared()
             if 0.0001 < lensq <= 1:
                 return p / math.sqrt(lensq)
-            
+    def random_in_unit_disk():
+        while True:
+            p = vec3(utilities.random_double(-1,1), utilities.random_double(-1,1), 0)
+            if p.length_squared() < 1:
+                return p
+        
+        
     def random_on_hemisphere(normal):
         on_unit_sphere = vec3.random_unit_vector()
         if vec3.dot(on_unit_sphere, normal) > 0.0:
