@@ -1,5 +1,9 @@
+import math
+
 from ray import Ray
 from vec3 import vec3
+import utilities
+
 class Material():
     def scatter(self, r_in, rec):
         return False, None, None
@@ -43,7 +47,20 @@ class Dielectric(Material):
             ri = self.refraction_index
 
         unit_direction = vec3.unit_vector(r_in.direction())
-        refracted = vec3.refract(unit_direction, rec.normal, ri)
+        cos_theta = min(vec3.dot(-unit_direction, rec.normal), 1.0)
+        sin_theta = math.sqrt(1.0 - cos_theta*cos_theta)
 
-        scattered = Ray(rec.p, refracted)
+        cannot_refract = ri * sin_theta > 1.0
+        
+        if cannot_refract or Dielectric.reflectance(cos_theta, ri) > utilities.random_double():
+            direction = vec3.reflect(unit_direction, rec.normal)
+        else:
+            direction = vec3.refract(unit_direction, rec.normal, ri)
+
+        scattered = Ray(rec.p, direction)
+        
         return True, scattered, attenuation
+    def reflectance(cosine, refraction_index):
+        r0 = (1 - refraction_index) / (1 + refraction_index)
+        r0 = r0*r0
+        return r0 + (1-r0) * (1 - cosine)**5
