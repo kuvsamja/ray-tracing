@@ -1,7 +1,7 @@
 import sys
 import math
+import multiprocessing
 
-from pyautogui import pixel
 
 from vec3 import vec3
 from ray import Ray
@@ -12,6 +12,36 @@ from hittable_list import HittableList
 from material import Material, Lambertian, Metal
 from interval import Interval
 import utilities
+
+def render_worker(args):
+    start, end, image_width, image_height, samples_per_pixel, max_depth, camera_data, world, k = args
+    buffer = []
+    pixel00_loc, pixel_delta_u, pixel_delta_v, camera_center, defocus_angle, camera_center, defocus_disk_u, defocus_disk_v = camera_data
+    for j in range(start, end):
+        if k == 19:
+            print(j)
+        for i in range(image_width):
+            pixel_color = vec3(0, 0, 0)
+            for s in range(samples_per_pixel):
+                r = Camera.get_ray(camera_data, i, j)
+                pixel_color += Camera.ray_color_static(r, world, max_depth)
+            pixel_color /= samples_per_pixel
+                
+            r = pixel_color[0]
+            g = pixel_color[1]
+            b = pixel_color[2]
+
+            r = Camera.linear_to_gamma(r)
+            g = Camera.linear_to_gamma(g)
+            b = Camera.linear_to_gamma(b)
+
+            ir = int(r * 255.999)
+            ig = int(g * 255.999)
+            ib = int(b * 255.999)
+            buffer.append(f"{ir} {ig} {ib}\n")
+    print(k)
+    return buffer
+            
 
 class Camera():
     def __init__(self):
@@ -26,6 +56,7 @@ class Camera():
         self.vup      = vec3(0,1,0)
         self.defocus_angle = 0
         self.focus_dist = 10
+    
 
     def render_init(self):
         # Image
@@ -57,33 +88,37 @@ class Camera():
         self.defocus_disk_u = u * defocus_radius
         self.defocus_disk_v = v * defocus_radius
 
+
     def render(self, world):
         self.render_init()
-        self.world = world
+        num_procs = multiprocessing.cpu_count()
+        chunk = self.image_height // num_procs
+        tasks = []
 
-        past_percentage = -1
-        percentage = -1
-        with open("img.ppm", "w") as self.img:
-            self.img.write(f"P3\n{self.image_width} {self.image_height}\n255\n")
-            for j in range(self.image_height):
-                past_percentage = percentage
-                percentage = int(j / self.image_height * 100)
-                if past_percentage != percentage:
-                    sys.stdout.write(f"{percentage}\n")
-                for i in range(self.image_width):
-                    pixel_color = vec3(0, 0, 0)
-                    self.sample = 0
-                    for self.sample in range(self.samples_per_pixel):
-                        self.r = self.get_ray(i, j)
-                        pixel_color += self.ray_color(self.r, world, self.max_depth)
-                    
-                    self.write_color(self.pixel_samples_scale * pixel_color)
-                
-                    
-        print("100\ndone")
+        # Pack minimal camera info to send to workers
+        camera_data = (self.pixel00_loc, self.pixel_delta_u, self.pixel_delta_v, self.camera_center, self.defocus_angle, self.camera_center, self.defocus_disk_u, self.defocus_disk_v)
 
-    
-    def ray_color(self, r, world, depth, recourses = False):
+        for k in range(num_procs):
+            start = k * chunk
+            end = (k+1) * chunk if k != num_procs - 1 else self.image_height
+            tasks.append((start, end, self.image_width, self.image_height,
+                          self.samples_per_pixel, self.max_depth, camera_data, world, k))
+
+        with multiprocessing.Pool(num_procs) as pool:
+            buffers = pool.map(render_worker, tasks)
+
+        with open("image/img.ppm", "w") as f:
+            f.write(f"P3\n{self.image_width} {self.image_height}\n255\n")
+            for k in range(len(buffers)):
+                buffers[k] = ("".join(buffers[k]))
+            buffers = "".join(buffers)
+            f.write(buffers)
+
+        print("Rendering done!")
+    @staticmethod
+    def ray_color_static(r, world, depth):
+        from hittable import HitRecord
+        from interval import Interval
         rec = HitRecord()
         if depth <= 0:
             return vec3(0, 0, 0)
@@ -91,60 +126,33 @@ class Camera():
         if hit_anything:
             does_scatter, scattered, attenuation = rec.mat.scatter(r, rec)
             if does_scatter:
-                return attenuation * self.ray_color(scattered, world, depth-1)
-        # return vec3(1,1,1)
+                return attenuation * Camera.ray_color_static(scattered, world, depth-1)
         unit_direction = vec3.unit_vector(r.direction())
         a = 0.5*(unit_direction.y() + 1.0)
         return (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0)
-        # hit_anything, rec = world.hit(r, Interval(0.001, math.inf), rec)
-        # if hit_anything:
-        #     direction = rec.normal + vec3.random_unit_vector()
-        #     # direction = vec3.random_on_hemisphere(rec.normal)
-        #     return 0.5 * self.ray_color(Ray(rec.p, direction), world, depth - 1, False)
-        # if recourses:
-        #     return vec3(1, 1, 1)
-        # unit_direction = vec3.unit_vector(r.direction())
-        # a = 0.5*(unit_direction.y() + 1.0)
-        # return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0)
-    
+        
     def linear_to_gamma(linear_component):
         if linear_component > 0:
             return math.sqrt(linear_component)
         return 0
 
-    def write_color(self, pixel_color):
-        r = pixel_color[0]
-        g = pixel_color[1]
-        b = pixel_color[2]
-
-        r = Camera.linear_to_gamma(r)
-        g = Camera.linear_to_gamma(g)
-        b = Camera.linear_to_gamma(b)
-
-        ir = int(r * 255.999)
-        ig = int(g * 255.999)
-        ib = int(b * 255.999)
-        self.img.write(f"{str(ir)} {str(ig)} {str(ib)}\n")
-
     def get_ray(self, i, j):
-        # Construct a camera ray originating from the origin and directed at randomly sampled
-        # point around the pixel location i, j.
-
-        offset = self.sample_square()
-        pixel_sample = self.pixel00_loc + ((i + offset.x()) * self.pixel_delta_u) + ((j + offset.y()) * self.pixel_delta_v)
-        if self.defocus_angle <= 0:
-            ray_origin = self.camera_center
+        pixel00_loc, pixel_delta_u, pixel_delta_v, camera_center, defocus_angle, camera_center, defocus_disk_u, defocus_disk_v = self
+        offset = Camera.sample_square()
+        pixel_sample = pixel00_loc + ((i + offset.x()) * pixel_delta_u) + ((j + offset.y()) * pixel_delta_v)
+        if defocus_angle <= 0:
+            ray_origin = camera_center
         else:
-            ray_origin = self.defocus_disk_sample()
+            ray_origin = Camera.defocus_disk_sample(camera_center, defocus_disk_u, defocus_disk_v)
         ray_direction = pixel_sample - ray_origin
 
         return Ray(ray_origin, ray_direction)
     
-    def defocus_disk_sample(self):
+    def defocus_disk_sample(camera_center, defocus_disk_u, defocus_disk_v):
         p = vec3.random_in_unit_disk()
-        return self.camera_center + (p[0] * self.defocus_disk_u) + (p[1] * self.defocus_disk_v)
+        return camera_center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v)
 
-    def sample_square(self):
+    def sample_square():
         # Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
         return vec3(utilities.random_double() - 0.5, utilities.random_double() - 0.5, 0)
     
