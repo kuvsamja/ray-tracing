@@ -13,12 +13,12 @@ from interval import Interval
 import utilities
 
 def render_worker(args):
-    start, end, image_width, image_height, samples_per_pixel, max_depth, camera_data, world = args
-    buffer = []
-    pixel00_loc, pixel_delta_u, pixel_delta_v, camera_center, defocus_angle, camera_center, defocus_disk_u, defocus_disk_v = camera_data
-    # start_time = time.time()
+    start, end, image_width, image_height, samples_per_pixel, max_depth, camera_data, world, k = args
+    buffer = ""
+    pixel00_loc, pixel_delta_u, pixel_delta_v, camera_center, defocus_angle, camera_center, defocus_disk_u, defocus_disk_v  = camera_data
+    start_time = time.time()
     for j in range(start, end):
-        # print(f"{k}: {j}, {time.time() - start_time}s")
+        print(f"{k}: {j - start}, {time.time() - start_time}s")
         for i in range(image_width):
             pixel_color = vec3(0, 0, 0)
             for s in range(samples_per_pixel):
@@ -37,8 +37,11 @@ def render_worker(args):
             ir = int(r * 255.999)
             ig = int(g * 255.999)
             ib = int(b * 255.999)
-            buffer.append(f"{ir} {ig} {ib}\n")
-    print("finished")
+            buffer += f"{ir} {ig} {ib}\n"
+    print(f"finished slice {k} in {time.time() - start_time}s")
+    with open("image_parts/" + str(k) + ".ppm", "w") as img:
+        img.write(f"P3\n{image_width} {end - start}\n255\n")
+        img.write(buffer)
     return start, buffer
             
 
@@ -47,7 +50,7 @@ class Camera():
         self.image_width = 1080
         self.aspect_ratio = 16 / 9
         self.samples_per_pixel = 1
-        self.max_depth = 50
+        self.max_depth = 20
 
         self.vfov = 90
         self.lookfrom = vec3(0,0,0)
@@ -90,7 +93,7 @@ class Camera():
     def render(self, world):
         self.render_init()
         num_procs = multiprocessing.cpu_count()
-        chunk_size = 5  # number of rows per chunk (tune this!)
+        chunk_size = 10  # number of rows per chunk (tune this!)
 
         # Pack minimal camera info to send to workers
         camera_data = (
@@ -105,7 +108,7 @@ class Camera():
             start = y
             end = min(y + chunk_size, self.image_height)
             tasks.append((start, end, self.image_width, self.image_height,
-                          self.samples_per_pixel, self.max_depth, camera_data, world))
+                          self.samples_per_pixel, self.max_depth, camera_data, world, y / chunk_size))
 
         buffers = []
         with multiprocessing.Pool(num_procs) as pool:

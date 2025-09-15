@@ -60,13 +60,13 @@ def main():
     # world.add(Sphere(vec3( 1.0,    0.0, -1.0),   0.5, material_right));
 
 
-    cam.aspect_ratio      = 4 / 3
-    cam.image_width       = 100
-    cam.samples_per_pixel = 10
+    cam.aspect_ratio      = 16 / 9
+    cam.image_width       = 1200
+    cam.samples_per_pixel = 100
     cam.max_depth         = 50
 
 
-    cam.defocus_angle = 0.0
+    cam.defocus_angle = 0.6
     cam.focus_dist    = 10.0
 
     cam.vfov     = 20
