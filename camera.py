@@ -1,7 +1,6 @@
-import sys
 import math
 import multiprocessing
-
+import time
 
 from vec3 import vec3
 from ray import Ray
@@ -14,12 +13,12 @@ from interval import Interval
 import utilities
 
 def render_worker(args):
-    start, end, image_width, image_height, samples_per_pixel, max_depth, camera_data, world, k = args
+    start, end, image_width, image_height, samples_per_pixel, max_depth, camera_data, world = args
     buffer = []
     pixel00_loc, pixel_delta_u, pixel_delta_v, camera_center, defocus_angle, camera_center, defocus_disk_u, defocus_disk_v = camera_data
+    # start_time = time.time()
     for j in range(start, end):
-        if k == 19:
-            print(j)
+        # print(f"{k}: {j}, {time.time() - start_time}s")
         for i in range(image_width):
             pixel_color = vec3(0, 0, 0)
             for s in range(samples_per_pixel):
@@ -39,8 +38,8 @@ def render_worker(args):
             ig = int(g * 255.999)
             ib = int(b * 255.999)
             buffer.append(f"{ir} {ig} {ib}\n")
-    print(k)
-    return buffer
+    print("finished")
+    return start, buffer
             
 
 class Camera():
@@ -88,31 +87,39 @@ class Camera():
         self.defocus_disk_u = u * defocus_radius
         self.defocus_disk_v = v * defocus_radius
 
-
     def render(self, world):
         self.render_init()
         num_procs = multiprocessing.cpu_count()
-        chunk = self.image_height // num_procs
-        tasks = []
+        chunk_size = 5  # number of rows per chunk (tune this!)
 
         # Pack minimal camera info to send to workers
-        camera_data = (self.pixel00_loc, self.pixel_delta_u, self.pixel_delta_v, self.camera_center, self.defocus_angle, self.camera_center, self.defocus_disk_u, self.defocus_disk_v)
+        camera_data = (
+            self.pixel00_loc, self.pixel_delta_u, self.pixel_delta_v,
+            self.camera_center, self.defocus_angle, self.camera_center,
+            self.defocus_disk_u, self.defocus_disk_v
+        )
 
-        for k in range(num_procs):
-            start = k * chunk
-            end = (k+1) * chunk if k != num_procs - 1 else self.image_height
+        # Build lots of small row-range tasks
+        tasks = []
+        for y in range(0, self.image_height, chunk_size):
+            start = y
+            end = min(y + chunk_size, self.image_height)
             tasks.append((start, end, self.image_width, self.image_height,
-                          self.samples_per_pixel, self.max_depth, camera_data, world, k))
+                          self.samples_per_pixel, self.max_depth, camera_data, world))
 
+        buffers = []
         with multiprocessing.Pool(num_procs) as pool:
-            buffers = pool.map(render_worker, tasks)
+            for start, buf in pool.imap_unordered(render_worker, tasks):
+                buffers.append((start, buf))
 
+        # Re-order results by row start
+        buffers.sort(key=lambda x: x[0])
+
+        # Write image
         with open("image/img.ppm", "w") as f:
             f.write(f"P3\n{self.image_width} {self.image_height}\n255\n")
-            for k in range(len(buffers)):
-                buffers[k] = ("".join(buffers[k]))
-            buffers = "".join(buffers)
-            f.write(buffers)
+            for i, rows in buffers:
+                f.write("".join(rows))
 
         print("Rendering done!")
     @staticmethod

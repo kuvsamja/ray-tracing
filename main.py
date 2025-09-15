@@ -61,7 +61,7 @@ def main():
 
 
     cam.aspect_ratio      = 4 / 3
-    cam.image_width       = 200
+    cam.image_width       = 100
     cam.samples_per_pixel = 10
     cam.max_depth         = 50
 
